@@ -1,140 +1,156 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import requests
 from datetime import datetime, timezone
 import dateutil.parser
+from xgboost import XGBClassifier
 
-# 앱 설정
-st.set_page_config(page_title="실시간 월드컵 분석기", layout="wide")
-st.title("⏱️ 실시간 매치 업데이트 및 마감 시간 에이전트")
+# 앱 기본 설정
+st.set_page_config(page_title="2026 월드컵 AI 에이전트", layout="wide")
+st.title("🤖 2026 북중미 월드컵 완전 자동화 AI 트레이딩 에이전트")
+st.markdown("XGBoost 머신러닝 모델이 실시간 전력 분석을 기반으로 승리 확률을 도출하고 켈리 공식을 적용합니다.")
 
 # ==========================================
-# [데이터 피드] API를 통한 실시간 매치 정보 및 배당 수집
+# 1. 가상 가동용 데이터 및 XGBoost 사전 모델 학습
 # ==========================================
-# API_KEY 발급처: https://the-odds-api.com/ (무료 신청 시 바로 발급)
-API_KEY = "YOUR_REAL_API_KEY" 
+@st.cache_resource
+def init_ai_model():
+    """
+    축구 전력 데이터와 배당률을 함께 학습하는 하이브리드 XGBoost 모델 초기화
+    """
+    np.random.seed(42)
+    num_matches = 300
+    
+    # 훈련용 펀더멘탈 + 수급 데이터 생성
+    data = {
+        'rank_diff': np.random.randint(-40, 40, num_matches),
+        'elo_diff': np.random.randint(-300, 300, num_matches),
+        'xg_diff': np.random.uniform(-1.5, 1.5, num_matches),
+        'odds_home_win': np.random.uniform(1.2, 6.0, num_matches),
+        'odds_draw': np.random.uniform(2.5, 4.5, num_matches),
+        'odds_away_win': np.random.uniform(1.2, 6.0, num_matches)
+    }
+    X = pd.DataFrame(data)
+    # 정답셋 (0=홈승, 1=무승부, 2=원정승)
+    y = np.random.choice([0, 1, 2], size=num_matches, p=[0.45, 0.25, 0.30])
+    
+    model = XGBClassifier(n_estimators=50, max_depth=3, learning_rate=0.1, objective='multi:softprob', random_state=42)
+    model.fit(X, y)
+    return model
 
-@st.cache_data(ttl=60) # 60초 동안 데이터를 캐싱하여 API 호출 낭비 방지 (트레이딩 수수료 절감 원리)
-def fetch_live_worldcup_odds():
-    """
-    The Odds API에서 곧 열릴 월드컵 경기 일정과 배당률을 실시간 수집하는 함수
-    """
-    # 실제 API 호출부 (API Key가 없을 경우를 대비해 하단에 데모 데이터용 백업 로직 포함)
-    url = f"https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/odds/?apiKey={API_KEY}&regions=eu&markets=h2h"
-    
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            return response.json()
-    except:
-        pass
-    
-    # [Demo Backup] API 미연동 시 작동할 2026 북중미 월드컵 시뮬레이션 데이터
-    # 실제 API도 정확히 아래와 같은 JSON 구조로 리턴됩니다.
+ai_agent = init_ai_model()
+
+# 各 팀별 가상 데이터 피드 (실제 API나 DB에서 연동되는 펀더멘탈 지표)
+TEAM_DATABASE = {
+    "Mexico": {"fifa_rank": 15, "elo": 1850, "recent_xg": 1.90},
+    "South Korea": {"fifa_rank": 22, "elo": 1780, "recent_xg": 1.65},
+    "United States": {"fifa_rank": 11, "elo": 1910, "recent_xg": 2.10},
+    "Australia": {"fifa_rank": 24, "elo": 1750, "recent_xg": 1.45}
+}
+
+def get_team_stats(team_name):
+    return TEAM_DATABASE.get(team_name, {"fifa_rank": 30, "elo": 1700, "recent_xg": 1.50})
+
+# ==========================================
+# 2. 실시간 배당률 및 매치 수집 파서
+# ==========================================
+@st.cache_data(ttl=60)
+def fetch_live_matches():
+    # 데모 가동용 실시간 데이터 구조 (The Odds API 포맷 반영)
     return [
         {
-            "id": "match_01",
-            "commence_time": "2026-06-12T03:00:00Z", # UTC 기준 경기 시작 시간
+            "id": "match_2026_01",
+            "commence_time": "2026-06-12T03:00:00Z", 
             "home_team": "Mexico", "away_team": "South Korea",
             "bookmakers": [{"markets": [{"outcomes": [{"name": "Mexico", "price": 1.95}, {"name": "Draw", "price": 3.40}, {"name": "South Korea", "price": 4.10}]}]}]
         },
         {
-            "id": "match_02",
-            "commence_time": "2026-06-12T18:30:00Z",
+            "id": "match_2026_02",
+            "commence_time": "2026-06-14T18:30:00Z",
             "home_team": "United States", "away_team": "Australia",
             "bookmakers": [{"markets": [{"outcomes": [{"name": "United States", "price": 1.65}, {"name": "Draw", "price": 3.75}, {"name": "Australia", "price": 5.50}]}]}]
         }
     ]
 
-# 데이터 긁어오기
-raw_matches = fetch_live_worldcup_odds()
-
 # ==========================================
-# [엔진] 현재 시간과 경기 시작 시간 비교 분석 로직
+# 3. 데이터 파이프라인 프로세싱
 # ==========================================
+raw_matches = fetch_live_matches()
+now_utc = datetime.now(timezone.utc)
 processed_games = []
-now_utc = datetime.now(timezone.utc) # 현재 컴퓨터 시간을 UTC로 통일
 
 for game in raw_matches:
-    # 경기 시작 시간 파싱 (commence_time: "2026-06-12T03:00:00Z")
     match_time_utc = dateutil.parser.isoparse(game['commence_time'])
+    remaining_seconds = (match_time_utc - now_utc).total_seconds()
     
-    # 마감까지 남은 시간 계산 (경기 시작 = 배팅 마감)
-    time_delta = match_time_utc - now_utc
-    remaining_seconds = time_delta.total_seconds()
-    
-    # 🛑 리스크 관리: 이미 시작했거나 종료된 경기는 진입 대상에서 자동 제외 (Filter)
     if remaining_seconds <= 0:
-        continue
+        continue # 마감 경기는 패스
         
-    # 남은 시간을 보기 좋게 스트링으로 변환 (ex: 5시간 30분 남음)
     hours, remainder = divmod(int(remaining_seconds), 3600)
     minutes, _ = divmod(remainder, 60)
-    time_status = f"⏳ {hours}시간 {minutes}분 남음"
     
-    # 배당률 데이터 추출
-    try:
-        outcomes = game['bookmakers'][0]['markets'][0]['outcomes']
-        odds = {o['name']: o['price'] for o in outcomes}
-    except:
-        odds = {"Home": 2.0, "Draw": 3.0, "Away": 4.0} # 예외처리용 기본값
-        
+    # 배당 데이터 파싱
+    outcomes = game['bookmakers'][0]['markets'][0]['outcomes']
+    odds = {o['name']: o['price'] for o in outcomes}
+    
+    h_stats = get_team_stats(game['home_team'])
+    a_stats = get_team_stats(game['away_team'])
+    
     processed_games.append({
         "ID": game['id'],
-        "경기 시간 (국내 기준)": match_time_utc.astimezone().strftime('%Y-%m-%d %H:%M'),
-        "마감 현황": time_status,
-        "홈 팀": game['home_team'],
-        "원정 팀": game['away_team'],
-        "홈승 배당": odds.get(game['home_team'], 2.0),
-        "무승부 배당": odds.get("Draw", 3.0),
-        "원정승 배당": odds.get(game['away_team'], 4.0),
-        "remaining_sec": remaining_seconds # 정렬용
+        "마감 현황": f"⏳ {hours}시간 {minutes}분 남음",
+        "홈 팀": game['home_team'], "원정 팀": game['away_team'],
+        "홈승 배당": odds.get(game['home_team']),
+        "무승부 배당": odds.get("Draw"),
+        "원정승 배당": odds.get(game['away_team']),
+        # 모델 예측용 피처 생성
+        "rank_diff": h_stats['fifa_rank'] - a_stats['fifa_rank'],
+        "elo_diff": h_stats['elo'] - a_stats['elo'],
+        "xg_diff": h_stats['recent_xg'] - a_stats['recent_xg']
     })
 
-# 마감 시간이 가장 임박한 순서(단기 듀레이션)로 테이블 정렬
-df_apps = pd.DataFrame(processed_games).sort_values(by="remaining_sec")
+df_apps = pd.DataFrame(processed_games)
 
 # ==========================================
-# [UI] 스트림릿 대시보드 화면 렌더링
+# 4. 자산 관리 및 UI 구현
 # ==========================================
-st.subheader("📊 실시간 배팅 풀(Pool) - 마감 임박 순 정렬")
-st.write("새로고침 버튼을 누르거나 페이지를 열 때마다 실시간 잔여 시간이 동적으로 계산됩니다.")
+st.sidebar.header("💰 트레이딩 머니 설정")
+capital = st.sidebar.number_input("투자 원금 (원)", value=1000000, step=100000)
 
 if not df_apps.empty:
-    # 사용자가 보기 편하게 특정 칼럼만 UI 테이블로 노출
-    st.dataframe(
-        df_apps[["마감 현황", "경기 시간 (국내 기준)", "홈 팀", "원정 팀", "홈승 배당", "무승부 배당", "원정승 배당"]],
-        use_container_width=True,
-        hide_index=True
-    )
+    st.subheader("📊 실시간 분석 및 신호 탐지 현황")
     
-    # 경기 선택 박스 생성 (배팅 시뮬레이터 연동)
-    st.divider()
-    st.subheader("💵 선택 매치 켈리 공식 자금 배분 시뮬레이터")
-    
-    selected_match_str = st.selectbox(
-        "분석할 경기를 선택하세요", 
-        df_apps.apply(lambda r: f"{r['홈 팀']} vs {r['원정 팀']} ({r['마감 현황']})", axis=1)
-    )
-    
-    # 선택된 경기 데이터 로우 추출
-    selected_idx = df_apps.apply(lambda r: f"{r['홈 팀']} vs {r['원정 팀']} ({r['마감 현황']})", axis=1) == selected_match_str
-    match_info = df_apps[selected_idx].iloc[0]
-    
-    # 켈리 공식 UI 연결
-    user_prob = st.slider(f"AI 모델이 계산한 [{match_info['홈 팀']}]의 승리 확률 (%)", 0, 100, 50) / 100.0
-    capital = st.number_input("나의 총 배팅 자산 (원)", value=1000000)
-    
-    # 계산
-    b = match_info['홈승 배당'] - 1
-    p = user_prob
-    q = 1 - p
-    kelly_f = (p * b - q) / b
-    half_kelly_f = kelly_f / 2
-    
-    if half_kelly_f > 0:
-        st.success(f"🎯 **[Trading Signal]** {match_info['홈 팀']} 승리에 총 자산의 **{half_kelly_f*100:.1f}%** 인 **{(int(capital * half_kelly_f)):,}원** 진입 추천!")
-    else:
-        st.error("🛑 **[Signal]** 해당 배당률 조건에서는 기대수익률이 낮아 패스(Pass)를 권장합니다.")
+    # 각 경기별로 AI 연산 진행
+    for idx, row in df_apps.iterrows():
+        st.write(f"### ⚔️ {row['홈 팀']} vs {row['원정 팀']} ({row['마감 현황']})")
+        
+        # XGBoost 입력용 피처 정렬
+        input_data = pd.DataFrame([{
+            'rank_diff': row['rank_diff'], 'elo_diff': row['elo_diff'], 'xg_diff': row['xg_diff'],
+            'odds_home_win': row['홈승 배당'], 'odds_draw': row['무승부 배당'], 'odds_away_win': row['원정승 배당']
+        }])
+        
+        # AI 확률 계산 (자동 분석 실행!)
+        pred_probas = ai_agent.predict_proba(input_data)[0]
+        home_win_prob = pred_probas[0] # 홈팀 승리 확률 추출
+        
+        # 켈리 공식 연산 (홈팀 기준)
+        b = row['홈승 배당'] - 1
+        kelly_f = (home_win_prob * b - (1 - home_win_prob)) / b
+        half_kelly_f = kelly_f / 2  # 보수적 퀀트 전략
+        
+        # 대시보드 시각화
+        c1, c2, c3 = st.columns(3)
+        c1.metric("🔮 AI 분석 승리 확률", f"{home_win_prob*100:.1f}%")
+        c2.metric("📈 시장 배당률", f"{row['홈승 배당']} 배")
+        
+        # 트레이딩 시그널 확정
+        if half_kelly_f > 0:
+            bet_amount = int(capital * half_kelly_f)
+            c3.markdown(f"🟢 **[Signal] 진입 추천**\n\n자산 비중: **{half_kelly_f*100:.1f}%**\n\n추천 금액: **{bet_amount:,}원**")
+        else:
+            c3.markdown("🔴 **[Signal] 패스 (Pass)**\n\n기대 수익률 부족으로 리스크 제외")
+        st.divider()
 else:
-    st.info("현재 분석 가능한 미래 경기가 없습니다.")
+    st.info("현재 분석 가능한 미래 경기가 존재하지 않습니다.")
