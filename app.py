@@ -10,7 +10,7 @@ from xgboost import XGBClassifier
 # ==========================================
 # ⚙️ [필수 설정] 내 실시간 API 키 입력
 # ==========================================
-ODDS_API_KEY = "YOUR_API_KEY_HERE"  # 내 이메일로 온 API Key를 여기에 넣으세요.
+ODDS_API_KEY = "5edde4fede86b8f7fb79f2d844106505"  # 내 이메일로 온 API Key를 여기에 넣으세요.
 
 st.set_page_config(page_title="하이브리드 AI 에이전트 Pro v2", layout="wide")
 
