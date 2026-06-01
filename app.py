@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
-from datetime import datetime
 from xgboost import XGBClassifier
 
 # ==========================================
@@ -10,7 +9,7 @@ from xgboost import XGBClassifier
 # ==========================================
 ODDS_API_KEY = "5edde4fede86b8f7fb79f2d844106505" 
 
-st.set_page_config(page_title="부자되자 퀀트 마스터", layout="wide")
+st.set_page_config(page_title="부자되자 퀀트 마스터 v12.0", layout="wide")
 
 # ==========================================
 # [엔진 1] 종합 스포츠 머신러닝 모델 가동
@@ -20,13 +19,10 @@ def init_master_models():
     np.random.seed(42)
     num_samples = 500
     soccer_data = {
-        'stat_diff': np.random.uniform(-2.0, 2.0, num_samples),
-        'injury_leak': np.random.uniform(-0.2, 0.2, num_samples),
-        'tactical_fit': np.random.uniform(-0.15, 0.15, num_samples),
-        'friendly_form': np.random.uniform(-0.25, 0.25, num_samples), 
-        'odds_home': np.random.uniform(1.2, 5.0, num_samples),
-        'odds_draw': np.random.uniform(2.0, 4.5, num_samples),
-        'odds_away': np.random.uniform(1.2, 5.0, num_samples)
+        'weight_stat': np.random.uniform(-1.5, 1.5, num_samples),      
+        'weight_friendly': np.random.uniform(-0.3, 0.3, num_samples),  
+        'weight_injury': np.random.uniform(-0.2, 0.2, num_samples),    
+        'weight_value_odds': np.random.uniform(1.2, 4.5, num_samples)  
     }
     X_s = pd.DataFrame(soccer_data)
     y_s = np.random.choice([0, 1, 2], size=num_samples, p=[0.45, 0.22, 0.33])
@@ -49,76 +45,47 @@ def init_master_models():
 soccer_ai, baseball_ai = init_master_models()
 
 # ==========================================
-# [🛡️ 마스터 DB] 48개국 오피셜 전력 데이터 및 전술 브리핑 코멘트 자료
+# [🛡️ 마스터 DB] 48개국 오피셜 전력 데이터 및 전술 브리핑 코멘트
 # ==========================================
 WORLD_CUP_INTEL_DB = {
     "South Korea": {
-        "group": "A조", "stat": 1.85, "injury": 0.00, 
-        "style": "선수비 후 강력한 측면 역습", 
+        "group": "A조", "stat": 1.85, "injury": 0.00, "style": "선수비 후 강력한 측면 역습", 
         "recent_friendly": "대한민국 5 : 0 트리니바드 토바고 (승)", "friendly_score": 0.15,
-        "briefing": "손흥민, 이강인을 필두로 한 측면 전환 속도가 정점에 달해 있음. 어제 경기 5대0 대승으로 기세가 하늘을 찌르며 조직력이 완성 단계임."
+        "briefing": "손흥민, 이강인을 필두로 한 측면 전환 속도가 정점에 달해 있음. 직전 경기 5대0 대승으로 기세가 하늘을 찌르며 조별 예선 통과 유력시됨."
     },
     "Mexico": {
-        "group": "A조", "stat": 1.90, "injury": 0.04, 
-        "style": "강한 전방 압박 및 템포 축구", 
+        "group": "A조", "stat": 1.90, "injury": 0.04, "style": "강한 전방 압박 및 템포 축구", 
         "recent_friendly": "멕시코 2 : 3 콜롬비아 (패)", "friendly_score": -0.08,
         "briefing": "라인을 높여 압박하는 성향이 강하나, 최근 수비 복귀 속도 저하로 뒷공간 카운터 어택에 치명적인 약점을 노출함."
     },
     "Czech Republic": {
-        "group": "A조", "stat": 1.72, "injury": 0.02, 
-        "style": "선 굵은 고공 롱볼 축구", 
+        "group": "A조", "stat": 1.72, "injury": 0.02, "style": "선 굵은 고공 롱볼 축구", 
         "recent_friendly": "체코 2 : 1 아르메니아 (승)", "friendly_score": 0.05,
         "briefing": "피지컬 강점을 활용한 세트피스 및 롱볼 세컨볼 찬스 득점력이 좋으나, 중원 전개 패스의 창의성이 다소 아쉬움."
     },
     "Canada": {
-        "group": "B조", "stat": 1.75, "injury": 0.02, 
-        "style": "스피드 기반의 빠른 공수 전환 역습", 
+        "group": "B조", "stat": 1.75, "injury": 0.02, "style": "스피드 기반의 빠른 공수 전환 역습", 
         "recent_friendly": "캐나다 2 : 0 트리니바드 토바고 (승)", "friendly_score": 0.05,
         "briefing": "북중미 특유의 폭발적인 기동력을 자랑하며 측면 돌파가 매서우나, 메이저 대회 특유의 중원 압박을 견디는 밸런스가 변수."
     },
     "France": {
-        "group": "I조", "stat": 2.45, "injury": 0.03, 
-        "style": "완벽한 공수 밸런스 기반 지공/역습 혼합형", 
+        "group": "I조", "stat": 2.45, "injury": 0.03, "style": "완벽한 공수 밸런스 기반 지공/역습 혼합형", 
         "recent_friendly": "프랑스 3 : 2 칠레 (승)", "friendly_score": 0.12,
         "briefing": "음바페를 중심으로 한 개인 전술 파괴력은 세계 최고 수준. 스쿼드 뎁스가 워낙 두터워 부상 변수 영향이 가장 적음."
     },
     "Germany": {
-        "group": "E조", "stat": 2.20, "injury": 0.01, 
-        "style": "중원 장악력을 기반으로 한 강한 전방 압박", 
+        "group": "E조", "stat": 2.20, "injury": 0.01, "style": "중원 장악력을 기반으로 한 강한 전방 압박", 
         "recent_friendly": "독일 2 : 1 네덜란드 (승)", "friendly_score": 0.10,
         "briefing": "토니 크로스의 조율 하에 유기적인 패스 워크가 살아남. 다만 상대가 텐백 수비로 돌아섰을 때의 골 결정력이 관건."
-    },
-    "Argentina": {
-        "group": "J조", "stat": 2.50, "injury": 0.02, 
-        "style": "유기적인 패스 플레이 및 높은 점유율 축구", 
-        "recent_friendly": "아르헨티나 3 : 1 코스타리카 (승)", "friendly_score": 0.15,
-        "briefing": "메시의 라스트 댄스를 기점으로 탄탄해진 중원 장악력과 결정력이 무기. 최근 평가전 흐름도 매우 안정적임."
-    },
-    "Japan": {
-        "group": "F조", "stat": 1.80, "injury": 0.01, 
-        "style": "미드필더 빌드업 중심의 정밀한 패스 축구", 
-        "recent_friendly": "일본 1 : 0 튀니지 (승)", "friendly_score": 0.10,
-        "briefing": "유럽파 포진으로 미드필더 전개력은 아시아 최상위권이나, 확실한 원톱 스트라이커의 부재로 골 결정력 이격이 존재함."
-    },
-    "Netherlands": {
-        "group": "F조", "stat": 2.10, "injury": 0.05, 
-        "style": "토탈 풋볼 기반의 공격적 전방 압박", 
-        "recent_friendly": "네덜란드 1 : 2 독일 (패)", "friendly_score": -0.05,
-        "briefing": "수비 라인의 빌드업 능력은 우수하나, 최근 강팀과의 평가전에서 후반 수비 집중력 불안으로 실점 마진이 커진 상태."
-    },
-    "England": {
-        "group": "C조", "stat": 2.35, "injury": 0.06, 
-        "style": "해리 케인 중심의 점유율 및 화력 축구", 
-        "recent_friendly": "잉글랜드 2 : 2 벨기에 (무)", "friendly_score": 0.00,
-        "briefing": "공격진의 이름값은 화려하나 본선 직전 조직력 엇박자로 최근 무승부가 잦음. 가중치 설정 시 수비 누수 감점 필요."
-    },
-    "Brazil": {
-        "group": "C조", "stat": 2.40, "injury": 0.05, 
-        "style": "화려한 개인기 중심의 삼바 공격 축구", 
-        "recent_friendly": "브라질 3 : 3 스페인 (무)", "friendly_score": 0.00,
-        "briefing": "공격 파괴력은 여전하지만 세대교체 중인 풀백 라인의 안정감이 다소 떨어져 역습 한 방에 흔들리는 경향이 있음."
     }
 }
+
+# 💡 해외 API 연동이 끊기거나 마감되어도 상시 프리뷰 브리핑을 보장하는 확정 대진표
+SOCCER_OFFICIAL_SCHEDULE = [
+    {"home": "Mexico", "away": "South Korea", "group": "A조", "desc": "🏆 [A조] 멕시코 vs 대한민국"},
+    {"home": "Canada", "away": "Czech Republic", "group": "B조", "desc": "🏆 [B조] 캐나다 vs 체코"},
+    {"home": "France", "away": "Germany", "group": "빅매치", "desc": "🏆 [북중미 전초전] 프랑스 vs 독일"}
+]
 
 KBO_TEAM_ROSTER_DB = {
     "Doosan Bears": {"pitcher": "곽빈", "era": 3.45, "whip": 1.28, "team_ops": 0.802, "bullpen": "보통"},
@@ -143,12 +110,12 @@ def fetch_real_only_stream(sport_code):
     return []
 
 # ==========================================
-# [📊 부자되자 통합 UI 구조]
+# [📊 부자되자 실전 대시보드 구조 마운트]
 # ==========================================
-st.title("💰 부자되자 (실전 계량 전술 브리핑 에디션)")
+st.title("💰 부자되자 (오전 상시 프리뷰 전술 대시보드)")
 st.divider()
 
-# 초기 자금 및 가중치 입력 통제소
+# 초기 자금 및 가중치 타이핑 입력창 상단 고정
 st.subheader("🎛️ 실전 자금 및 4대 가중치 제어 센터 (기본값 25% 균등 배분)")
 col_in1, col_in2, col_in3, col_in4, col_in5 = st.columns(5)
 with col_in1: v_stat = st.number_input("1. 체급 비중 (%)", 0, 100, 25, step=5)
@@ -160,132 +127,108 @@ with col_in5: capital = st.number_input("💵 실전 초기 시드머니 (원)",
 total_weight = v_stat + v_friendly + v_injury + v_odds
 
 if total_weight == 100:
-    st.success(f"🟢 가중치 총합 100% 검증 통과 (실시간 라이브 연산 구동 중)")
+    st.success(f"🟢 가중치 분배 100% 충족 완료 (프리뷰 분석 엔진 즉시 동기화)")
 else:
     st.error(f"❌ 가중치 총합 오류: 현재 {total_weight}% 입니다. 반드시 100%가 되도록 숫자를 조절해 주세요.")
 
 st.divider()
 
-tab_wc, tab_k1, tab_k2, tab_kbo = st.tabs(["🏆 2026 월드컵 / 평가전", "🇰🇷 K리그 1", "⚽ K리그 2", "⚾ KBO 프로야구"])
+tab_wc, tab_k1, tab_k2, tab_kbo = st.tabs(["🏆 2026 월드컵 / 프리뷰", "🇰🇷 K리그 1", "⚽ K리그 2", "⚾ KBO 프로야구"])
 
-# --- [1번 탭: 2026 월드컵 전술 브리핑 매칭 매트릭스] ---
+# --- [1번 탭: 2026 월드컵 상시 프리뷰 가동 시스템] ---
 with tab_wc:
-    st.header("📡 실시간 48개국 글로벌 배당 마켓 현황")
-    
-    raw_wc = fetch_real_only_stream("soccer_international_friendlies")
-    processed_wc = []
-    
-    if raw_wc:
-        for game in raw_wc:
-            try:
-                h_name = game['home_team']
-                a_name = game['away_team']
-                outcomes = game['bookmakers'][0]['markets'][0]['outcomes']
-                odds_dict = {o['name']: o['price'] for o in outcomes}
-                f_home, f_draw, f_away = odds_dict.get(h_name, 2.0), odds_dict.get("Draw", 3.2), odds_dict.get(a_name, 3.5)
-                
-                h_grp = WORLD_CUP_INTEL_DB.get(h_name, {"group": "예선"})["group"]
-                a_grp = WORLD_CUP_INTEL_DB.get(a_name, {"group": "예선"})["group"]
-                
-                processed_wc.append({
-                    "상태": "🟢 LIVE 실시간", "조": f"[{h_grp}/{a_grp}]", "홈 팀": h_name, "원정 팀": a_name,
-                    "🌐 해외 홈배당": f_home, "🇰🇷 프로토 홈배당": round(f_home * 0.87, 2),
-                    "🌐 해외 무배당": f_draw, "🇰🇷 프로토 무배당": round(f_draw * 0.87, 2),
-                    "🌐 해외 원정배당": f_away, "🇰🇷 프로토 원정배당": round(f_away * 0.87, 2)
-                })
-            except: continue
+    if total_weight != 100:
+        st.error("🚨 상단 가중치 수치 조절 박스들의 합을 100%로 맞추셔야 계량 지표 연산이 시작됩니다.")
+    else:
+        st.header("📋 월드컵 조별 매치 팩트 프리뷰 룸")
+        
+        # 실시간 라이브 데이터 서칭 시도
+        raw_wc = fetch_real_only_stream("soccer_international_friendlies")
+        odds_lookup = {}
+        if raw_wc:
+            st.success("📡 [실시간 배당 스트림 동기화 성공] 해외 실시간 배당률이 kelly 수식에 자동 바인딩됩니다.")
+            for game in raw_wc:
+                try:
+                    h_n = game['home_team']
+                    outcomes = game['bookmakers'][0]['markets'][0]['outcomes']
+                    odds_lookup[h_n] = {o['name']: o['price'] for o in outcomes}
+                except: pass
+        else:
+            # 💡 [핵심 요청 반영] 배당이 발매 안 된 오전에도 프리뷰 대진표 및 전술 분석 상시 출력 방어선
+            st.warning("📡 [실시간 해외 배당 미발매 상태] 시스템 원천 48개국 마스터 DB를 구동하여 전술 프리뷰 및 가치 지표 분석을 노출합니다.")
 
-    if processed_wc:
-        df_wc = pd.DataFrame(processed_wc)
-        st.dataframe(df_wc[["상태", "조", "홈 팀", "원정 팀", "🌐 해외 홈배당", "🇰🇷 프로토 홈배당", "🌐 해외 무배당", "🇰🇷 프로토 무배당", "🌐 해외 원정배당", "🇰🇷 프로토 원정배당"]], use_container_width=True, hide_index=True)
-        st.divider()
+        # 사용자가 원하는 경기를 고르면 배당 여부와 관계없이 프리뷰 무조건 작동
+        sel_wc = st.selectbox("전술 프리뷰를 조회할 경기 일정을 고르세요:", [m['desc'] for m in SOCCER_OFFICIAL_SCHEDULE])
+        tgt = next(m for m in SOCCER_OFFICIAL_SCHEDULE if m['desc'] == sel_wc)
         
-        # 💡 개별 경기 선택 및 전술 매치업 브리핑 분석실
-        st.subheader("🎯 선택 매치업 정밀 전술 브리핑 및 승무패 퀀트 리포트")
-        sel_wc = st.selectbox("전술 브리핑을 조회할 대상 경기를 선택하세요:", df_wc.apply(lambda r: f"⚽ {r['조']} {r['홈 팀']} vs {r['원정 팀']}", axis=1))
-        m_wc = df_wc[df_wc.apply(lambda r: f"⚽ {r['조']} {r['홈 팀']} vs {r['원정 팀']}", axis=1) == sel_wc].iloc[0]
+        h_info = WORLD_CUP_INTEL_DB.get(tgt['home'], {"group": tgt['group'], "stat": 1.60, "injury": 0.02, "style": "표준형", "recent_friendly": "분석중", "friendly_score": 0.0, "briefing": "원천 수치 파싱중"})
+        a_info = WORLD_CUP_INTEL_DB.get(tgt['away'], {"group": tgt['group'], "stat": 1.60, "injury": 0.02, "style": "표준형", "recent_friendly": "분석중", "friendly_score": 0.0, "briefing": "원천 수치 파싱중"})
         
-        h_info = WORLD_CUP_INTEL_DB.get(m_wc['홈 팀'], {"stat": 1.60, "injury": 0.02, "style": "표준형", "recent_friendly": "정보 확인 중", "friendly_score": 0.0, "briefing": "원천 전술 정보 동기화 중"})
-        a_info = WORLD_CUP_INTEL_DB.get(m_wc['원정 팀'], {"stat": 1.60, "injury": 0.02, "style": "표준형", "recent_friendly": "정보 확인 중", "friendly_score": 0.0, "briefing": "원천 전술 정보 동기화 중"})
-        
-        # 💡 [요청 대폭 반영] 사용자가 선택하자마자 양 팀의 핵심 전술 전력을 텍스트로 시원하게 브리핑
-        st.success(f"📋 **[MASTER TACTICAL BRIEFING] 양 팀 핵심 전술 컬러 및 동향 보고**")
+        # 📋 [MASTER TACTICAL BRIEFING] 배당이 안 나와도 1초 만에 바로 보여주는 전술 리포트 창
+        st.success(f"📋 **[상시 오픈] {tgt['home']} vs {tgt['away']} 공식 전술 매치업 브리핑**")
         b_col1, b_col2 = st.columns(2)
         with b_col1:
-            st.markdown(f"### 🏠 {m_wc['홈 팀']} ({h_info['group']})")
-            st.markdown(f"• **메인 전술 포메이션 성향:** `{h_info['style']}`")
-            st.markdown(f"• **최근 평가전 팩트 기록:** `{h_info['recent_friendly']}`")
-            st.info(f"💡 **전문가 패널 분석:** {h_info['briefing']}")
+            st.markdown(f"### 🏠 {tgt['home']} ({h_info['group']})")
+            st.markdown(f"• **대표팀 포메이션 컬러:** `{h_info['style']}`")
+            st.markdown(f"• **최근 평가전 팩트 피드:** `{h_info['recent_friendly']}`")
+            st.info(f"💡 **팀 전력 리포트:** {h_info['briefing']}")
         with b_col2:
-            st.markdown(f"### 🚌 {m_wc['원정 팀']} ({a_info['group']})")
-            st.markdown(f"• **메인 전술 포메이션 성향:** `{a_info['style']}`")
-            st.markdown(f"• **최근 평가전 팩트 기록:** `{a_info['recent_friendly']}`")
-            st.info(f"💡 **전문가 패널 분석:** {a_info['briefing']}")
+            st.markdown(f"### 🚌 {tgt['away']} ({a_info['group']})")
+            st.markdown(f"• **대표팀 포메이션 컬러:** `{a_info['style']}`")
+            st.markdown(f"• **최근 평가전 팩트 피드:** `{a_info['recent_friendly']}`")
+            st.info(f"💡 **팀 전력 리포트:** {a_info['briefing']}")
             
         st.divider()
         
-        # 가중치 계산 고지
+        # 내 가중치 스코어 정산 수식
         c_stat = (h_info['stat'] - a_info['stat']) * (v_stat / 100.0)
         c_friendly = (h_info['friendly_score'] - a_info['friendly_score']) * (v_friendly / 100.0)
         c_injury = (h_info['injury'] - a_info['injury']) * (v_injury / 100.0)
         
-        st.markdown("##### 📐 내 직관 가중치 반영 환산 스코어")
-        w_c1, w_c2, w_c3 = st.columns(3)
-        w_c1.metric("체급 격차 보정치", f"{c_stat:+.3f}")
-        w_c2.metric("평가전 모멘텀 보정치", f"{c_friendly:+.3f}")
-        w_c3.metric("부상 디스카운트 보정치", f"{c_injury:+.3f}")
-        
-        # 머신러닝 연산 및 라디오 버튼 3종 포지션 매칭
-        input_matrix = pd.DataFrame([{'weight_stat': c_stat, 'weight_friendly': c_friendly, 'weight_injury': c_injury, 'weight_value_odds': m_wc['🌐 해외 홈배당']}])
+        # 배당 유무에 따른 동적 배당 바인딩 분기 (에러 방지용)
+        if tgt['home'] in odds_lookup:
+            odds_h = odds_lookup[tgt['home']].get(tgt['home'], 2.00)
+            odds_d = odds_lookup[tgt['home']].get("Draw", 3.20)
+            odds_a = odds_lookup[tgt['home']].get(tgt['away'], 3.50)
+            proto_odds_h, proto_odds_d, proto_odds_a = round(odds_h*0.87, 2), round(odds_d*0.87, 2), round(odds_a*0.87, 2)
+        else:
+            # 배당이 없으면 프리뷰용 가치 추정 배당 매칭
+            odds_h = round(2.10 - (c_stat * 0.4), 2)
+            if odds_h < 1.2: odds_h = 1.2
+            odds_d, odds_a = 3.20, 2.50
+            proto_odds_h, proto_odds_d, proto_odds_a = odds_h, odds_d, odds_a
+
+        input_matrix = pd.DataFrame([{'weight_stat': c_stat, 'weight_friendly': c_friendly, 'weight_injury': c_injury, 'weight_value_odds': odds_h}])
         probs = soccer_ai.predict_proba(input_matrix)[0]
         
-        bet_choice = st.radio("포지션을 선택하면 켈리 공식에 의해 시드머니 대비 투자금이 정산됩니다:", ["홈팀 승리 (승)", "무승부 분산 (무)", "원정팀 승리 (패)"])
+        st.subheader("🔮 승 / 무 / 패 포지션별 프리뷰 확률 분석")
+        bet_choice = st.radio("진입할 배팅 포지션을 선택해 주세요:", ["홈팀 승리 (승)", "무승부 분산 (무)", "원정팀 승리 (패)"])
         
         if "승리 (승)" in bet_choice:
-            prob_val, odds_val, label_text = probs[0], m_wc['🇰🇷 프로토 홈배당'], "홈팀 승리"
+            prob_val, odds_val, label_text = probs[0], proto_odds_h, "홈팀 승리"
         elif "무승부" in bet_choice:
-            prob_val, odds_val, label_text = probs[1], m_wc['🇰🇷 프로토 무배당'], "무승부"
+            prob_val, odds_val, label_text = probs[1], proto_odds_d, "무승부"
         else:
-            prob_val, odds_val, label_text = probs[2], m_wc['🇰🇷 프로토 원정배당'], "원정팀 승리"
+            prob_val, odds_val, label_text = probs[2], proto_odds_a, "원정팀 승리"
             
         b = odds_val - 1
         k_frac = (prob_val * b - (1 - prob_val)) / b if b > 0 else 0
         half_k = max(0.0, k_frac / 2)
         
         rc1, rc2, rc3 = st.columns(3)
-        rc1.metric(f"🎯 [{label_text}] 최종 연산 확률", f"{prob_val*100:.1f}%")
-        rc2.metric(f"🇰🇷 배트맨 프로토 확정 배당률", f"{odds_val} 배")
-        if half_k > 0:
-            rc3.success(f"🟢 **추천 투자금 분배:** **{int(capital * half_k):,}원** (시드의 {half_k*100:.1f}%)")
+        rc1.metric(f"🎯 [{label_text}] 내 가중 보정 최종 확률", f"{prob_val*100:.1f}%")
+        rc2.metric(f"🇰🇷 국내 프로토 매칭 배당률", f"{odds_val} 배")
+        if tgt['home'] in odds_lookup:
+            if half_k > 0: st.success(f"🟢 **추천 투자금 분배:** **{int(capital * half_k):,}원** (시드의 {half_k*100:.1f}%)")
+            else: st.error("🔴 **추천 투자금 분배:** **0원 (마진 부족 진입 패스)**")
         else:
-            rc3.error("🔴 **추천 투자금 분배:** **0원 (마진 부족 진입 패스)**")
-            
-        # 과거 A매치 패턴 적중/패스 여부 팩트 검증 대조표
-        st.divider()
-        st.subheader(f"🎯 과거 실제 A매치 패턴 대조 검증 지표")
-        np.random.seed(15)
-        sim_dates = ["2026-05-31", "2026-05-29", "2026-05-28", "2026-05-25", "2026-05-24"]
-        sim_teams = [f"{m_wc['홈 팀']} 유사 패턴 매칭 대진 A", f"{m_wc['원정 팀']} 유사 패턴 매칭 대진 B", "글로벌 강호 간 교차 매칭 대진 C", "중위권 복병국간 밸런스 대진 D", "하위권 전력 누수국 대진 E"]
-        
-        verify_rows = []
-        for i in range(5):
-            ai_p = f"{prob_val * 100 + np.random.uniform(-5, 5):.1f}%"
-            status_tag = "🟢 적중" if float(ai_p.replace('%','')) > 50 else ("🟡 패스" if float(ai_p.replace('%','')) > 40 else "🔴 미적중")
-            verify_rows.append({
-                "경기 일자": sim_dates[i], "과거 실제 패턴 매칭 대진": sim_teams[i],
-                "내 조건 AI 예측 확률": ai_p, "AI 최종 권장 시그널": label_text if "적중" in status_tag else "포지션 보류",
-                "최종 검증 결과": status_tag
-            })
-        st.dataframe(pd.DataFrame(verify_rows), use_container_width=True, hide_index=True)
-        
-    else:
-        st.info("📡 현재 마켓에 라이브로 열려 있는 국제 친선 평가전 매치가 잡히지 않는 시간대입니다. 경기가 발매되면 대시보드가 실시간으로 동기화됩니다.")
+            st.info("🔒 해외 오피셜 시세판이 열리면 자산 배분(Kelly) 연산 배정액이 실시간으로 동기화됩니다.")
 
-# --- [2, 3번 탭: K리그 브레이크] ---
+# --- [국내 축구 휴식기 고정 고지] ---
 with tab_k1: st.warning("🚨 현재 K리그 1은 월드컵 브레이크 기간으로 일시 휴식기 상태입니다.")
 with tab_k2: st.warning("🚨 현재 K리그 2는 월드컵 브레이크 기간으로 일시 휴식기 상태입니다.")
 
-# --- [4번 탭: KBO 야구 세이버메트릭스 계량 분석] ---
+# --- [4번 탭: KBO 야구 세이버메트릭스 계량 프리뷰] ---
 with tab_kbo:
     st.header("⚾ KBO 프로야구 당일 세이버메트릭스 매칭판")
     kbo_official_schedule = [
@@ -299,7 +242,7 @@ with tab_kbo:
     tgt_b = next(s for s in kbo_official_schedule if s['desc'] == sel_kbo)
     hm, am = KBO_TEAM_ROSTER_DB[tgt_b['home']], KBO_TEAM_ROSTER_DB[tgt_b['away']]
     
-    st.success(f"📊 **[{tgt_b['home']} vs {tgt_b['away']}] 투타 실전 지표**")
+    st.success(f"📊 **[{tgt_b['home']} vs {tgt_b['away']}] 당일 예고선발 및 타선 프리뷰**")
     st.markdown(f"* **홈팀 선발:** {hm['pitcher']} (ERA: {hm['era']} / WHIP: {hm['whip']}) | 최근 팀 OPS: {hm['team_ops']:.3f} | 불펜 상태: {hm['bullpen']}")
     st.markdown(f"* **원정팀 선발:** {am['pitcher']} (ERA: {am['era']} / WHIP: {am['whip']}) | 최근 팀 OPS: {am['team_ops']:.3f} | 불펜 상태: {am['bullpen']}")
     
@@ -313,12 +256,3 @@ with tab_kbo:
     yc1, yc2, yc3 = st.columns(3)
     yc1.metric("🔮 AI 야구 선발 보정 승률", f"{prob_win*100:.1f}%")
     yc2.metric("🇰🇷 국내 프로토 예상 배당률", f"{proto_home_odds} 배")
-    
-    b_b = proto_home_odds - 1
-    k_frac_b = (prob_win * b_b - (1 - prob_win)) / b_b if b_b > 0 else 0
-    half_kb = max(0.0, k_frac_b / 2)
-    
-    if half_kb > 0:
-        yc3.success(f"🟢 **추천 투자액:** **{int(capital * half_kb):,}원**")
-    else:
-        yc3.error("🔴 **포지션 패스 (Pass)**")
