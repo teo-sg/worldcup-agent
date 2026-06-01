@@ -225,7 +225,7 @@ with tab_kbo:
 
     if st.button("📡 KBO 배당 피드 불러오기", key="kbo_load"):
         with st.spinner("KBO 배당 수신 중..."):
-            st.session_state["kbo_games"] = fetch_odds(api_key, "baseball_kbo_league")
+            st.session_state["kbo_games"] = fetch_odds(api_key, "baseball_kbo")
 
     kbo_games = st.session_state.get("kbo_games", [])
 
