@@ -5,7 +5,7 @@ import requests
 # 페이지 설정
 # ============================================================
 st.set_page_config(
-    page_title="Quant Master v2.0",
+    page_title="Quant Master v2.1",
     page_icon="⚡",
     layout="wide"
 )
@@ -97,13 +97,12 @@ def parse_game_odds(game: dict) -> dict | None:
 
 
 # ============================================================
-# 헤더 및 메인 상단 설정 영역 (이동 완료)
+# 헤더 및 메인 상단 설정 영역 (유지)
 # ============================================================
 st.markdown("## ⚡ QUANT MASTER v2.0")
 st.caption("월드컵 / A매치 + KBO 통합 배당 분석 엔진 · Half-Kelly 자산배분 · 실데이터 전용")
 st.divider()
 
-# 💡 사이드바에서 메인 화면 최상단 2분할 레이아웃으로 전면 이동
 top_c1, top_c2 = st.columns([2, 1])
 with top_c1:
     api_key = st.text_input(
@@ -125,7 +124,7 @@ with top_c2:
 st.divider()
 
 # ============================================================
-# 사이드바 (안내문구만 유지)
+# 사이드바
 # ============================================================
 with st.sidebar:
     st.markdown("### ⚡ QUANT MASTER v2.0")
@@ -139,7 +138,6 @@ with st.sidebar:
     - 모든 최종 투자 판단의 책임은 사용자 본인에게 있습니다.
     """)
 
-# API 키 필수 예외 처리
 if not api_key:
     st.info("👆 화면 상단에서 API 키와 시드머니를 입력하시면 실전 계량 엔진이 가동됩니다.")
     st.stop()
@@ -150,7 +148,7 @@ if not api_key:
 tab_wc, tab_kbo = st.tabs(["🏆 월드컵 / A매치", "⚾ KBO 프로야구"])
 
 # ============================================================
-# 탭 1 — 월드컵 / A매치
+# 탭 1 — 월드컵 / A매치 (수선 완료)
 # ============================================================
 with tab_wc:
     st.markdown("#### 🏆 국제 A매치 / 친선경기 실시간 배당 분석")
@@ -159,7 +157,6 @@ with tab_wc:
         "현재는 발매 중인 국제 A매치 / 친선경기 배당을 분석합니다."
     )
 
-    # 수동 입력 토글
     manual_mode = st.toggle("📝 수동 배당 입력 모드 (프로토 배당 직접 입력)", value=False)
 
     if manual_mode:
@@ -191,17 +188,16 @@ with tab_wc:
         st.caption("※ 마진제거 내재확률 기준 / Half-Kelly 적용")
 
     else:
-        # 실시간 API 모드
+        # 💡 [핵심교정] API 공식 규격인 soccer_international로 마켓 키 수정 완료
         if st.button("📡 배당 피드 불러오기", key="wc_load"):
             with st.spinner("배당 수신 중..."):
-                st.session_state["wc_games"] = fetch_odds(api_key, "soccer_international_friendlies")
+                st.session_state["wc_games"] = fetch_odds(api_key, "soccer_international")
 
         games = st.session_state.get("wc_games", [])
 
         if not games:
             st.info("💡 현재 실시간 API 마켓에 대기 중인 국제 친선경기 시세가 없습니다. '📝 수동 배당 입력 모드'를 활성화하여 프로토 지표를 주입하세요.")
         else:
-            # 경기 목록 표시
             game_labels = [f"{g['home_team']} vs {g['away_team']}" for g in games]
             selected_label = st.selectbox("분석할 경기 선택", game_labels, key="wc_sel")
             selected_game = games[game_labels.index(selected_label)]
