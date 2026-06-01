@@ -1,18 +1,19 @@
 import streamlit as st
 import requests
+import pandas as pd  # 💡 [긴급 조치] 누락되었던 판다스 라이브러리를 완벽하게 장착했습니다.
 
 # ============================================================
 # 페이지 설정 및 전역 스타일
 # ============================================================
 st.set_page_config(
-    page_title="Quant Master v2.9 DebugPro",
+    page_title="Quant Master v2.91 DebugPro",
     page_icon="⚡",
     layout="wide"
 )
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght=400;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap');
     html, body, [class*="css"] { font-family: 'IBM Plex Mono', monospace; }
     .metric-box {
         background: #1a2235;
@@ -26,13 +27,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
-# [🛡️ 진실성 100%] 정밀 진단형 파이프라인 엔진
+# [🛡️ 데이터 무결성 100%] 정밀 진단형 파이프라인 엔진
 # ============================================================
 def fetch_all_upcoming_odds(api_key: str, sport_key: str, selected_regions: str) -> list:
-    """
-    [지적사항 반영 2번] regions=eu의 제한을 풀고 us,uk,eu,au 멀티 리전 통합 개방 확장
-    [지적사항 반영 내부 원인 추적] status_code와 원천 텍스트 응답을 화면에 정직하게 고지
-    """
     url = (
         f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds/"
         f"?apiKey={api_key}&regions={selected_regions}&markets=h2h&oddsFormat=decimal"
@@ -40,7 +37,6 @@ def fetch_all_upcoming_odds(api_key: str, sport_key: str, selected_regions: str)
     try:
         res = requests.get(url, timeout=8)
         
-        # 하단 디버깅 섹션을 위해 세션 상태에 실시간 상태 기록
         st.session_state["last_status"] = res.status_code
         st.session_state["last_response_text"] = res.text[:1000]
         
@@ -79,8 +75,8 @@ def kelly_card(col, label: str, prob: float, odds: float, capital: int, color: s
 # ============================================================
 # 메인 상단 통제 센터
 # ============================================================
-st.markdown("## ⚡ QUANT MASTER v2.9 DebugPro")
-st.caption("지적해 주신 6대 API 오류 원인 역추적 마운트 · 실시간 규격 검증 · 임의 데이터 0%")
+st.markdown("## ⚡ QUANT MASTER v2.91 DebugPro")
+st.caption("판다스 누락 버그 긴급 수선 완료 · 실시간 규격 검증 · 임의 데이터 0%")
 st.divider()
 
 top_c1, top_c2 = st.columns([2, 1])
@@ -89,7 +85,6 @@ with top_c1:
 with top_c2:
     capital = st.number_input("💵 실전 초기 운용 자산 (원)", min_value=10_000, value=1_000_000, step=100_000, format="%d")
 
-# [지적사항 반영 2번] 리전을 사용자가 유연하게 확장 선택할 수 있도록 전면에 격리 배치
 regions_input = st.text_input("🌐 수신 대상 북메이커 리전 설정 (CORS 및 누락 방지)", value="eu,uk,us,au")
 
 st.divider()
@@ -99,7 +94,6 @@ if not api_key:
     st.stop()
 
 # ============================================================
-# [🕵️ 핵심 추가: 지적사항 1번, 6번 반영] 
 # 내 API Key로 현재 호출 가능한 진짜 정식 스포츠 Key 목록 실시간 추적기
 # ============================================================
 st.subheader("🔍 1. 내 API Key 기반 실시간 가용 스포츠 종목 Key 전수 조사")
@@ -112,6 +106,7 @@ if st.button("📡 가용 공식 Sport Key 목록 전수 조회"):
             sport_res = requests.get(all_sports_url, timeout=6)
             if sport_res.status_code == 200:
                 st.success("🟢 공식 종목 피드 수신 성공 - 하단 명단에서 정확한 'key' 명칭을 복사하여 사용하세요.")
+                # 💡 이제 pd 선언 에러 없이 정상적으로 가용 마켓 표를 구축합니다.
                 sports_df = pd.DataFrame(sport_res.json())
                 if not sports_df.empty:
                     st.dataframe(sports_df[["key", "group", "title", "active"]], use_container_width=True, hide_index=True)
@@ -134,7 +129,6 @@ tab_soccer, tab_kbo = st.tabs(["⚽ 국제 축구 분석 룸", "⚾ 국내 KBO �
 # [탭 1] ⚽ 축구 분석 마스터
 # ------------------------------------------------------------
 with tab_soccer:
-    # [지적사항 1번 대책] 사용자가 위 실시간 표를 보고 정확한 공식 키를 타이핑하여 진입할 수 있도록 입력창 개방
     soccer_key_input = st.text_input("⚽ 축구 대상 마켓 Key 입력 (기본 글로벌 축구 규격)", value="soccer_international")
     
     st.markdown("##### 🎛️ 전술 변수 가중치 조율")
@@ -151,7 +145,6 @@ with tab_soccer:
 
     soccer_games = st.session_state.get("soc_data", [])
 
-    # [지적사항 5번 반영] 데이터 수집 직후 화면에 실시간 JSON 상태 및 경기 수 투명하게 고지
     if "last_status" in st.session_state:
         st.info(f"📡 API 응답 코드: {st.session_state['last_status']} | 탐지된 총 경기 수: {len(soccer_games)}개")
         with st.expander("🔍 [디버깅] API 원천 텍스트 응답(Response) 데이터 확인"):
@@ -168,7 +161,6 @@ with tab_soccer:
         selected_soccer = st.selectbox("분석 경기를 선택하세요:", soccer_labels, key="sb_soc")
         tgt_soccer_game = soccer_games[soccer_labels.index(selected_soccer)]
 
-        # [지적사항 3번 반영] IndexError 완벽 차단막 가동 - bookmakers 리스트 비어있을 시 수동 모드로 자동 패스 안내
         bookmakers = tgt_soccer_game.get("bookmakers", [])
         
         if len(bookmakers) == 0:
@@ -219,27 +211,25 @@ with tab_soccer:
 # [탭 2] ⚾ KBO 야구 분석 마스터
 # ------------------------------------------------------------
 with tab_kbo:
-    # [지적사항 1번 대책] 야구도 가용 Sport Key 명단을 보고 정확히 매칭할 수 있게 입력창 전면 개방
     baseball_key_input = st.text_input("⚾ 야구 대상 마켓 Key 입력 (KBO 정식 규격 매칭용)", value="baseball_kbo_league")
     
     if st.button("🔄 설정된 야구 마켓 피드 수신 가동", key="btn_kbo"):
         with st.spinner("야구 시세 동기화 중..."):
             st.session_state["kbo_data"] = fetch_all_upcoming_odds(api_key, baseball_key_input, regions_input)
 
-    kbo_games = st.session_state.get("kbo_data", [])
+    kbo_data = st.session_state.get("kbo_data", [])
 
-    if not kbo_games:
+    if not kbo_data:
         st.info("💡 비시즌이거나 오늘 자 야구 배당판 개장 전 시간대입니다. 가용 Sport Key 목록을 조회하여 시즌 키 명칭을 대조해 보세요.")
     else:
         kbo_labels = []
-        for g in kbo_games:
+        for g in kbo_data:
             g_time = g.get('commence_time', '시간미정').replace('T', ' ').replace('Z', '')
             kbo_labels.append(f"⚾ [{g_time}] {g.get('home_team')} vs {g.get('away_team')}")
 
         selected_kbo = st.selectbox("분석할 KBO 경기 선택:", kbo_labels, key="sb_kbo")
-        tgt_kbo_game = kbo_games[kbo_labels.index(selected_kbo)]
+        tgt_kbo_game = kbo_data[kbo_labels.index(selected_kbo)]
 
-        # [지적사항 3번 반영] 야구 배당판 bookmakers 리스트 공백 방어선 가동
         kbo_bookmakers = tgt_kbo_game.get("bookmakers", [])
         
         if len(kbo_bookmakers) == 0:
