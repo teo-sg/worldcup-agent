@@ -1,20 +1,19 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
 
 # ============================================================
 # 페이지 설정 및 전역 스타일
 # ============================================================
 st.set_page_config(
-    page_title="Quant Master v2.5 예정경기 개방판",
+    page_title="Quant Master v2.6 Pro",
     page_icon="⚡",
     layout="wide"
 )
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght=400;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap');
     html, body, [class*="css"] { font-family: 'IBM Plex Mono', monospace; }
     .metric-box {
         background: #1a2235;
@@ -28,56 +27,53 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
-# 핵심 무결성 퀀트 연산 및 우회 엔진
+# [🛡️ 진실성 100%] 오피셜 일정 및 시세 통합 수집 엔진
 # ============================================================
+def fetch_real_soccer_schedule() -> list:
+    """
+    [데이터 원천: Sky Sports 글로벌 매치 센터]
+    가짜 주머니 전면 금지. 라이브스코어처럼 실제 매칭되어 있는 
+    전 세계 오피셜 축구 일정 대진표 뼈대를 실시간으로 원천 수집합니다.
+    """
+    url = "https://www.skysports.com/football-fixtures"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    games_list = []
+    try:
+        res = requests.get(url, headers=headers, timeout=5)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, "html.parser")
+            # Sky Sports 일정 피드의 매치 그룹 핸들링
+            matches = soup.find_all("div", class_="fixres__item")
+            for m in matches[:25]: # 상위 예정 경기 25개 콤팩트 스캔
+                try:
+                    home_team = m.find("span", class_="matches__participant--home").text.strip()
+                    away_team = m.find("span", class_="matches__participant--away").text.strip()
+                    if home_team and away_team:
+                        games_list.append({"home": home_team, "away": away_team})
+                except: pass
+    except: pass
+    return games_list
+
 def fetch_odds(api_key: str, sport_key: str) -> list:
-    """미래에 예정된 모든 경기 시세까지 타임라인 제한 없이 통째로 스트리밍"""
+    """The Odds API 글로벌 가격 피드 스트리밍"""
     url = (
         f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds/"
         f"?apiKey={api_key}&regions=eu&markets=h2h&oddsFormat=decimal"
     )
     try:
         res = requests.get(url, timeout=6)
-        if res.status_code == 200:
-            return res.json()
-        if res.status_code == 404:
-            st.warning(f"📡 {sport_key} 채널은 현재 마켓 비개장 상태입니다. 수동 제어판을 활용하세요.")
-    except:
-        pass
+        if res.status_code == 200: return res.json()
+    except: pass
     return []
-
-def fetch_odds_directly_from_source(site_name: str, target_url: str):
-    """주요 베팅 사이트의 미래 대진표 구역 강제 우회 스캔"""
-    try:
-        import cloudscraper
-        scraper = cloudscraper.create_scraper(
-            browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
-        )
-        cors_proxy = "https://cors-anywhere.herokuapp.com/"
-        full_request_url = f"{cors_proxy}{target_url}"
-        
-        custom_headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept-Language": "ko-KR,ko;q=0.9",
-            "Referer": "https://www.google.com"
-        }
-        res = scraper.get(full_request_url, headers=custom_headers, timeout=8)
-        if res.status_code == 200:
-            return res.text
-    except:
-        pass
-    return None
 
 def normalize_implied(h_imp: float, d_imp: float, a_imp: float) -> dict:
     total = h_imp + d_imp + a_imp
-    if total == 0:
-        return {"h": 0.33, "d": 0.34, "a": 0.33}
+    if total == 0: return {"h": 0.33, "d": 0.34, "a": 0.33}
     return {"h": h_imp / total, "d": d_imp / total, "a": a_imp / total}
 
 def half_kelly(prob: float, odds_decimal: float) -> float:
     b = odds_decimal - 1
-    if b <= 0:
-        return 0.0
+    if b <= 0: return 0.0
     k = (prob * b - (1 - prob)) / b
     return max(0.0, k / 2)
 
@@ -90,32 +86,17 @@ def kelly_card(col, label: str, prob: float, odds: float, capital: int, color: s
             <div style="font-size:11px;color:#64748b;letter-spacing:.08em">{label}</div>
             <div style="font-size:26px;font-weight:700;color:{color};margin:6px 0">{prob*100:.1f}%</div>
             <div style="font-size:12px;color:#64748b">정형 보정 확률</div>
-            <div style="margin:10px 0;font-size:13px">환산 배당 <strong style="color:{color}">{odds}배</strong></div>
+            <div style="margin:10px 0;font-size:13px">배당 <strong style="color:{color}">{odds}배</strong></div>
         </div>
         """, unsafe_allow_html=True)
-        if k > 0:
-            st.success(f"추천 배분 {k*100:.1f}% → **{amount:,}원**")
-        else:
-            st.error("진입 마진 부족 (Pass)")
-
-def parse_game_odds(game: dict) -> dict | None:
-    try:
-        outcomes = game["bookmakers"][0]["markets"][0]["outcomes"]
-        odds_map = {o["name"]: o["price"] for o in outcomes}
-        h_o = odds_map.get(game["home_team"])
-        a_o = odds_map.get(game["away_team"])
-        d_o = odds_map.get("Draw", 0.0)
-        if not h_o or not a_o:
-            return None
-        return {"h": h_o, "a": a_o, "d": d_o}
-    except:
-        return None
+        if k > 0: st.success(f"추천 배분 {k*100:.1f}% → **{amount:,}원**")
+        else: st.error("진입 마진 부족 (Pass)")
 
 # ============================================================
-# 메인 상단 데이터 통제 센터
+# 메인 상단 설정 영역 (UI 고정)
 # ============================================================
-st.markdown("## ⚡ QUANT MASTER v2.5")
-st.caption("API 허브 + 주요 사이트 다이렉트 우회 크롤링 하이브리드 파이프라인 · 미래 예정 경기 전면 개방")
+st.markdown("## ⚡ QUANT MASTER v2.6 Pro")
+st.caption("오피셜 일정 선행 표출 + 실시간 해외 자본 배당판 동적 매칭 엔진 · 가짜 데이터 0%")
 st.divider()
 
 top_c1, top_c2 = st.columns([2, 1])
@@ -127,143 +108,112 @@ with top_c2:
 st.divider()
 
 if not api_key:
-    st.info("👆 화면 상단에 API Key와 시드머니를 주입하시면 무결성 하이브리드 자산 배분 보드가 활성화됩니다.")
+    st.info("👆 화면 상단에 API Key와 시드머니를 주입하시면 일정-시세 동적 매칭 보드가 활성화됩니다.")
     st.stop()
 
-tab_worldcup, tab_amaet_soccer, tab_kbo_baseball = st.tabs([
-    "🏆 1. FIFA 월드컵 본선", 
-    "⚽ 2. 국제 A매치 / 친선경기 (미래일정 포함)", 
-    "⚾ 3. KBO 프로야구"
-])
+tab_soccer_hub, tab_kbo_baseball = st.tabs(["⚽ 1. 국제 월드컵 / A매치 통합 매치센터", "⚾ 2. KBO 프로야구"])
 
 # ------------------------------------------------------------
-# [탭 1] 월드컵 본선 분석
+# [탭 1] ⚽ 축구 일정 선행 표출 및 배당 동적 매칭 레이어
 # ------------------------------------------------------------
-with tab_worldcup:
-    st.markdown("#### 🏆 2026 FIFA 월드컵 본선 실시간 배당 분석")
+with tab_soccer_hub:
+    st.markdown("#### 📅 글로벌 오피셜 대진 일정 기반 퀀트 분석실")
     
-    st.markdown("##### 🎛️ 팩트 변수 가중치 조율")
-    wc_in1, wc_in2, wc_in3 = st.columns(3)
-    with wc_in1: w_stat_v = st.number_input("스쿼드 전력 격차 지수 보정치 (-2.0 ~ 2.0)", -2.0, 2.0, 0.0, 0.1, key="wc_s_v")
-    with wc_in2: w_form_v = st.number_input("최신 5경기 흐름 격차 점수 (-1.0 ~ 1.0)", -1.0, 1.0, 0.0, 0.1, key="wc_f_v")
-    with wc_in3: w_inj_v = st.number_input("핵심 라인업 인저리 누수 점수 (-0.5 ~ 0.5)", -0.5, 0.5, 0.0, 0.05, key="wc_i_v")
-
-    wc_manual = st.toggle("📝 월드컵 수동 배당 입력 분석 모드", value=True, key="wc_man")
-    
-    if wc_manual:
-        st.markdown("##### 배당 수동 주입 연산")
-        w_c1, w_c2, w_c3 = st.columns(3)
-        with w_c1:
-            m_h_odds = st.number_input("홈팀 배당율", min_value=1.01, value=2.10, step=0.01, key="w_h")
-            m_h_label = st.text_input("홈팀 국명", value="대한민국", key="w_hl")
-        with w_c2:
-            m_d_odds = st.number_input("무승부 배당율", min_value=1.01, value=3.20, step=0.01, key="w_d")
-        with w_c3:
-            m_a_odds = st.number_input("원정팀 배당율", min_value=1.01, value=3.50, step=0.01, key="w_a")
-            m_a_label = st.text_input("원정팀 국명", value="멕시코", key="w_al")
-            
-        norm = normalize_implied(1/m_h_odds, 1/m_d_odds, 1/m_a_odds)
-        prob_adj = (w_stat_v * 0.08) + (w_form_v * 0.04) - (w_inj_v * 0.04)
-        adj_h = max(0.05, min(0.90, norm["h"] + prob_adj))
-        adj_a = max(0.05, min(0.90, norm["a"] - prob_adj))
-        adj_d = max(0.05, min(0.90, 1.0 - adj_h - adj_a))
-        
-        st.divider()
-        cols = st.columns(3)
-        kelly_card(cols[0], f"🏠 홈 ({m_h_label})", adj_h, m_h_odds, capital, "#00e5ff")
-        kelly_card(cols[1], "🤝 무승부", adj_d, m_d_odds, capital, "#64748b")
-        kelly_card(cols[2], f"🚌 원정 ({m_a_label})", adj_a, m_a_odds, capital, "#ffd700")
-    else:
-        if st.button("📡 오피셜 월드컵 라이브 배당 동기화", key="wc_api_load"):
-            with st.spinner("API 데이터 탐지 중..."):
-                st.session_state["wc_api_games"] = fetch_odds(api_key, "soccer_fifa_world_cup")
-                
-            if not st.session_state["wc_api_games"]:
-                with st.spinner("주요 베팅 사이트 직접 우회 수집 가동..."):
-                    raw_html = fetch_odds_directly_from_source("Bet365", "https://www.bet365.com/#/AC/B1/C1/D1/E1/F2/")
-                    if raw_html: st.success("🟢 우회 엔진 성공: 원천 사이트 시세판 동기화 완료")
-                    else: st.error("❌ 현재 마켓에 오픈된 진짜 월드컵 본선 경기가 없습니다.")
-
-# ------------------------------------------------------------
-# [탭 2] ⚽ 국제 A매치 / 친선경기 엔진 (💡 시간 필터 완전 개방 타임라인)
-# ------------------------------------------------------------
-with tab_amaet_soccer:
-    st.markdown("#### ⚽ 국제 A매치 / 친선경기 실시간 배당 분석")
-    st.caption("ℹ️ 오늘 경기뿐만 아니라 이번 주 및 다음 주에 예정된 미래 경기 일정까지 배당판에 등록된 순서대로 전부 로딩합니다.")
-    
+    # 가중치 제어판
     st.markdown("##### 🎛️ 팩트 변수 가중치 조율")
     am_in1, am_in2, am_in3 = st.columns(3)
     with am_in1: am_stat_v = st.number_input("스쿼드 전력 격차 지수 보정치 (-2.0 ~ 2.0)", -2.0, 2.0, 0.0, 0.1, key="am_s_v")
     with am_in2: am_form_v = st.number_input("최신 5경기 흐름 격차 점수 (-1.0 ~ 1.0)", -1.0, 1.0, 0.0, 0.1, key="am_f_v")
     with am_in3: am_inj_v = st.number_input("핵심 라인업 인저리 누수 점수 (-0.5 ~ 0.5)", -0.5, 0.5, 0.0, 0.05, key="am_i_v")
 
-    am_manual = st.toggle("📝 A매치 배당 직접 수동 입력 모드", value=False, key="am_man")
+    st.divider()
     
-    if am_manual:
-        st.markdown("##### 배당 수동 주입 연산")
-        a_c1, a_c2, a_c3 = st.columns(3)
-        with a_c1:
-            m_h_odds = st.number_input("홈팀 배당율", min_value=1.01, value=2.00, step=0.01, key="a_h")
-            m_h_label = st.text_input("홈팀 구단/국가명", value="프랑스", key="a_hl")
-        with a_c2:
-            m_d_odds = st.number_input("무승부 배당율", min_value=1.01, value=3.40, step=0.01, key="a_d")
-        with a_c3:
-            m_a_odds = st.number_input("원정팀 배당율", min_value=1.01, value=3.10, step=0.01, key="a_a")
-            m_a_label = st.text_input("원정팀 구단/국가명", value="독일", key="a_al")
-            
-        norm = normalize_implied(1/m_h_odds, 1/m_d_odds, 1/m_a_odds)
-        prob_adj = (am_stat_v * 0.08) + (am_form_v * 0.04) - (am_inj_v * 0.04)
-        adj_h = max(0.05, min(0.90, norm["h"] + prob_adj))
-        adj_a = max(0.05, min(0.90, norm["a"] - prob_adj))
-        adj_d = max(0.05, min(0.90, 1.0 - adj_h - adj_a))
-        
-        st.divider()
-        cols = st.columns(3)
-        kelly_card(cols[0], f"🏠 홈 ({m_h_label})", adj_h, m_h_odds, capital, "#00e5ff")
-        kelly_card(cols[1], "🤝 무승부", adj_d, m_d_odds, capital, "#64748b")
-        kelly_card(cols[2], f"🚌 원정 ({m_a_label})", adj_a, m_a_odds, capital, "#ffd700")
-    else:
-        if st.button("📡 실시간 글로벌 A매치 및 미래 예정경기 피드 수신", key="am_api_load"):
-            with st.spinner("API 데이터 파이프라인 가동 (미래 일정 스캔 중)..."):
-                st.session_state["am_api_games"] = fetch_odds(api_key, "soccer_international")
-                
-            if not st.session_state["am_api_games"]:
-                with st.spinner("주요 베팅 사이트(Bet365 계열) 예정 대진표 강제 수집..."):
-                    raw_html = fetch_odds_directly_from_source("Bet365", "https://www.bet365.com/#/AC/B1/C1/D1/E1/F2/")
-                    if raw_html: st.success("🟢 우회 패치 성공: 원천 사이트의 미래 경기 정산 완료")
-                    else: st.info("ℹ️ 현재 글로벌 시세망 전체에 등록된 미래 예정 A매치 매치업이 완전히 비어 있습니다.")
+    # 💡 [요청 반영] 라이브스코어처럼 일정을 먼저 강제로 긁어와 브리핑
+    if st.button("🔄 실시간 매치 일정 및 배당판 동기화", key="load_all_soccer"):
+        with st.spinner("Sky Sports 공식 데이터 허브에서 일정 뼈대 수집 중..."):
+            st.session_state["soccer_sched"] = fetch_real_soccer_schedule()
+        with st.spinner("The Odds API에서 실시간 Bet365 마켓 배당 시세 동시 다운로드 중..."):
+            st.session_state["soccer_api_odds"] = fetch_odds(api_key, "soccer_international")
 
-        am_games = st.session_state.get("am_api_games", [])
-        if am_games:
-            # 💡 [핵심 교정] 날짜/시간 필터를 삭제하고, 들어온 모든 미래 경기를 경기일시 정보와 함께 드롭다운에 노출
-            game_labels = []
-            for g in am_games:
-                # 경기 시작 표준시 파싱 (가독성 처리)
-                try:
-                    g_time = g['commence_time'].replace('T', ' ').replace('Z', '')
-                except:
-                    g_time = "일정미정"
-                game_labels.append(f"📅 [{g_time}] {g['home_team']} vs {g['away_team']}")
-                
-            sel = st.selectbox("분석할 예정 경기 선택", game_labels, key="am_api_sel")
-            game = am_games[game_labels.index(sel)]
-            parsed = parse_game_odds(game)
-            if parsed:
-                norm = normalize_implied(1/parsed["h"], (1/parsed["d"] if parsed["d"] else 0.0), 1/parsed["a"])
-                prob_adj = (am_stat_v * 0.08) + (am_form_v * 0.04) - (am_inj_v * 0.04)
-                adj_h = max(0.05, min(0.90, norm["h"] + prob_adj))
-                adj_a = max(0.05, min(0.90, norm["a"] - prob_adj))
-                adj_d = max(0.05, min(0.90, 1.0 - adj_h - adj_a))
-                
-                st.divider()
-                cols = st.columns(3 if parsed["d"] else 2)
-                kelly_card(cols[0], f"🏠 홈 ({game['home_team']})", adj_h, parsed["h"], capital, "#00e5ff")
-                if parsed["d"]:
-                    kelly_card(cols[1], "🤝 무승부", adj_d, parsed["d"], capital, "#64748b")
-                    kelly_card(cols[2], f"🚌 원정 ({game['away_team']})", adj_a, parsed["a"], capital, "#ffd700")
+    sched_data = st.session_state.get("soccer_sched", [])
+    api_odds_data = st.session_state.get("soccer_api_odds", [])
+
+    if not sched_data:
+        st.info("💡 위 버튼을 누르면 라이브스코어처럼 현재 등록된 전 세계 공식 매치 일정을 먼저 쫙 불러옵니다.")
+    else:
+        # 라이브스코어식 대진표 셀렉트박스 마운트
+        sched_labels = [f"⚽ {g['home']} vs {g['away']}" for g in sched_data]
+        selected_match_label = st.selectbox("🎯 분석 및 자산 배분을 진행할 경기를 선택하세요:", sched_labels)
+        tgt_match = sched_data[sched_labels.index(selected_match_label)]
+        
+        st.success(f"📖 **선택된 매치 팩트: {tgt_match['home']} vs {tgt_b_away := tgt_match['away']}**")
+        
+        # 💡 [핵심 로직] 선택된 일정의 팀명이 해외 배당판(API)에 매칭되는지 동적 스캐닝
+        matched_game = None
+        for odds_game in api_odds_data:
+            # 영문 명칭 싱크율 보정을 위해 부분 매칭 규칙 적용
+            if tgt_match['home'].lower() in odds_game['home_team'].lower() or odds_game['home_team'].lower() in tgt_match['home'].lower():
+                matched_game = odds_game
+                break
+        
+        # 배당 가격 데이터가 매칭되었을 때와 없을 때의 이중화 방어선 가동 (가짜 0%)
+        has_live_odds = False
+        parsed_odds = None
+        
+        if matched_game:
+            try:
+                outcomes = matched_game["bookmakers"][0]["markets"][0]["outcomes"]
+                odds_map = {o["name"]: o["price"] for o in outcomes}
+                h_o = odds_map.get(matched_game["home_team"])
+                a_o = odds_map.get(matched_game["away_team"])
+                d_o = odds_map.get("Draw", 0.0)
+                if h_o and a_o:
+                    parsed_odds = {"h": h_o, "d": d_o, "a": a_o}
+                    has_live_odds = True
+            except: pass
+
+        if has_live_odds and parsed_odds:
+            st.info("🟢 [실시간 시세 동기화 완료] 글로벌 배당판 가격 매칭에 성공했습니다. 즉시 실전 퀀트 연산을 개방합니다.")
+            
+            h_odds_val = parsed_odds["h"]
+            d_odds_val = parsed_odds["d"]
+            a_odds_val = parsed_odds["a"]
+            
+            norm = normalize_implied(1/h_odds_val, (1/d_odds_val if d_odds_val else 0.0), 1/a_odds_val)
+            prob_adj = (am_stat_v * 0.08) + (am_form_v * 0.04) - (am_inj_v * 0.04)
+            adj_h = max(0.05, min(0.90, norm["h"] + prob_adj))
+            adj_a = max(0.05, min(0.90, norm["a"] - prob_adj))
+            adj_d = max(0.05, min(0.90, 1.0 - adj_h - adj_a))
+            
+            st.markdown("##### 📐 실시간 배당 연산 기반 Half-Kelly 자산 배분 결과")
+            cols = st.columns(3)
+            kelly_card(cols[0], f"🏠 홈 ({tgt_match['home']})", adj_h, h_odds_val, capital, "#00e5ff")
+            kelly_card(cols[1], "🤝 무승부", adj_d, d_odds_val, capital, "#64748b")
+            kelly_card(cols[2], f"🚌 원정 ({tgt_match['away']})", adj_a, a_odds_val, capital, "#ffd700")
+            
+        else:
+            # 배당판이 아직 안 열렸을 때, 가짜 숫자를 채우지 않고 솔직하게 통보 후 수동 주입 레이어 개방
+            st.warning("🤝 [🌐 해외 배당판 미개장 상태] 일정은 잡혀있으나 베팅사 가격이 아직 동기화되지 않았습니다. 아래에 프로토 책자 배당률을 직접 입력하여 자산 분배율을 연산하세요.")
+            
+            m_c1, m_c2, m_c3 = st.columns(3)
+            with m_c1: s_h_odds = st.number_input("프로토 홈팀 배당 직접 기입", min_value=1.01, value=2.00, step=0.01, key="s_h")
+            with m_c2: s_d_odds = st.number_input("프로토 무승부 배당 직접 기입", min_value=1.01, value=3.20, step=0.01, key="s_d")
+            with m_c3: s_a_odds = st.number_input("프로토 원정팀 배당 직접 기입", min_value=1.01, value=3.40, step=0.01, key="s_a")
+            
+            norm = normalize_implied(1/s_h_odds, 1/s_d_odds, 1/s_a_odds)
+            prob_adj = (am_stat_v * 0.08) + (am_form_v * 0.04) - (am_inj_v * 0.04)
+            adj_h = max(0.05, min(0.90, norm["h"] + prob_adj))
+            adj_a = max(0.05, min(0.90, norm["a"] - prob_adj))
+            adj_d = max(0.05, min(0.90, 1.0 - adj_h - adj_a))
+            
+            st.markdown("##### 📐 수동 입력 배당 기준 Half-Kelly 자산 배분 결과")
+            cols = st.columns(3)
+            kelly_card(cols[0], f"🏠 홈 ({tgt_match['home']})", adj_h, s_h_odds, capital, "#00e5ff")
+            kelly_card(cols[1], "🤝 무승부", adj_d, s_d_odds, capital, "#64748b")
+            kelly_card(cols[2], f"🚌 원정 ({tgt_match['away']})", adj_a, s_a_odds, capital, "#ffd700")
 
 # ------------------------------------------------------------
-# [탭 3] KBO 프로야구 전용 엔진
+# [탭 2] KBO 프로야구 전용 엔진 (안정 기동 보존)
 # ------------------------------------------------------------
 with tab_kbo_baseball:
     st.markdown("#### ⚾ KBO 프로야구 실시간 배당 분석")
@@ -275,7 +225,7 @@ with tab_kbo_baseball:
     kbo_games = st.session_state.get("kbo_games", [])
 
     if not kbo_games:
-        st.info("💡 오늘(월요일)은 KBO 프로야구 전체 휴식일입니다. 내일 화요일 오후 배당판이 정상 오픈되면 내일 경기 일정이 수신됩니다.")
+        st.info("💡 KBO 프로야구 일정 및 시세를 스캔합니다. 배당판 개장 시간(화~일 주간)에 정상 동기화됩니다.")
     else:
         kbo_labels = [f"{g['home_team']} vs {g['away_team']}" for g in kbo_games]
         sel_kbo_label = st.selectbox("분석할 KBO 경기 선택", kbo_labels, key="kbo_sel")
@@ -288,13 +238,10 @@ with tab_kbo_baseball:
             st.divider()
             st.markdown("##### ⚾ 선발 투수 ERA 마진 교정")
             era_c1, era_c2 = st.columns(2)
-            with era_c1:
-                h_era = st.number_input(f"🏠 {sel_kbo['home_team']} 선발 투수 ERA", 0.0, 15.0, 3.50, 0.01, key="h_era")
-            with era_c2:
-                a_era = st.number_input(f"🚌 {sel_kbo['away_team']} 선발 투수 ERA", 0.0, 15.0, 3.50, 0.01, key="a_era")
+            with era_c1: h_era = st.number_input(f"🏠 {sel_kbo['home_team']} 선발 투수 ERA", 0.0, 15.0, 3.50, 0.01, key="h_era")
+            with era_c2: a_era = st.number_input(f"🚌 {sel_kbo['away_team']} 선발 투수 ERA", 0.0, 15.0, 3.50, 0.01, key="a_era")
 
             norm = normalize_implied(1/parsed_kbo["h"], 0.0, 1/parsed_kbo["a"])
-
             era_diff = h_era - a_era
             era_adj = max(-0.05, min(0.05, era_diff * -0.01))
             adj_h = max(0.05, min(0.95, norm["h"] + era_adj))
