@@ -168,13 +168,29 @@ with tab_wc:
     st.markdown("#### 🏆 국제 A매치 / 친선경기 실시간 배당")
     st.warning("⚠️ 2026 FIFA 월드컵 본선 배당은 대회 개막 후 자동 수신됩니다. 현재는 A매치/친선경기 배당을 분석합니다.")
 
+    WC_SOURCES = [
+        ("⚽ 국제 친선경기 (A매치)", "soccer_international_friendlies"),
+        ("🏆 FIFA 월드컵", "soccer_fifa_world_cup"),
+        ("🇰🇷 K리그1", "soccer_korea_kleague1"),
+        ("🏴󠁧󠁢󠁥󠁮󠁧󠁿 EPL", "soccer_epl"),
+        ("🇪🇸 라리가", "soccer_spain_la_liga"),
+        ("🇩🇪 분데스리가", "soccer_germany_bundesliga"),
+        ("🇮🇹 세리에A", "soccer_italy_serie_a"),
+        ("🇫🇷 리그앙", "soccer_france_ligue_one"),
+        ("🇳🇱 에레디비시", "soccer_netherlands_eredivisie"),
+        ("🇵🇹 프리메이라리가", "soccer_portugal_primeira_liga"),
+        ("🇺🇸 MLS", "soccer_usa_mls"),
+    ]
+    wc_source_label = st.selectbox("리그 / 대회 선택", [s[0] for s in WC_SOURCES], key="wc_source")
+    wc_sport_key = dict(WC_SOURCES)[wc_source_label]
+
     if st.button("📡 배당 불러오기", key="wc_load"):
         with st.spinner("배당 수신 중..."):
-            st.session_state["wc_games"] = fetch_odds(api_key, "soccer_international_friendlies")
+            st.session_state["wc_games"] = fetch_odds(api_key, wc_sport_key)
 
     games = st.session_state.get("wc_games", [])
     if not games:
-        st.info("버튼을 눌러 배당을 불러오세요.")
+        st.info("리그를 선택하고 버튼을 눌러 배당을 불러오세요.")
     else:
         labels = [f"{g['home_team']} vs {g['away_team']}" for g in games]
         sel = st.selectbox("경기 선택", labels, key="wc_sel")
