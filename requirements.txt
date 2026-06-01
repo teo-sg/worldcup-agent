@@ -4,3 +4,5 @@ requests
 python-dateutil
 xgboost
 scikit-learn
+beautifulsoup4
+
