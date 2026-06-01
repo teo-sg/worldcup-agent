@@ -108,10 +108,9 @@ st.caption("월드컵 / A매치 + KBO 통합 배당 분석 엔진 · Half-Kelly 
 st.divider()
 
 # ============================================================
-# 사이드바 — 공통 설정
+# 본문 상단 — 공통 설정 (모바일 대응)
 # ============================================================
-with st.sidebar:
-    st.markdown("### ⚙️ 공통 설정")
+with st.expander("⚙️ 설정 열기 (API 키 · 시드머니)", expanded=True):
     api_key = st.text_input(
         "the-odds-api.com API Key",
         type="password",
@@ -126,19 +125,10 @@ with st.sidebar:
         step=100_000,
         format="%d"
     )
-    st.divider()
-    st.markdown("""
-    **데이터 출처**  
-    - 배당: the-odds-api.com  
-    - 가짜/임의 데이터 미사용  
-    
-    **면책**  
-    본 도구는 참고용입니다.  
-    투자 손실 책임은 사용자 본인에게 있습니다.
-    """)
+    st.caption("데이터 출처: the-odds-api.com · 가짜/임의 데이터 미사용 · 본 도구는 참고용입니다")
 
 if not api_key:
-    st.info("👈 사이드바에서 API 키와 시드머니를 입력하세요.")
+    st.info("⬆️ 위 설정창에서 API 키를 입력하세요.")
     st.stop()
 
 # ============================================================
