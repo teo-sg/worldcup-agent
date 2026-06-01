@@ -5,4 +5,5 @@ python-dateutil
 xgboost
 scikit-learn
 beautifulsoup4
-
+cloudscraper>=1.2.71
+beautifulsoup4>=4.12.0
